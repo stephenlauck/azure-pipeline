@@ -60,3 +60,55 @@ resource "azurerm_network_interface" "pipelinenic"{
     public_ip_address_id = "${azurerm_public_ip.pipelinepublicip.id}"
   }
 }
+
+resource "random_id" "randomId" {
+  keepers = {
+    # Generate a new ID only when a new resource group is defined
+    resource_group = "${azurerm_resource_group.pipelinegroup.name}"
+  }
+
+  byte_length = 8
+}
+
+resource "azurerm_storage_account" "pipelinestorageaccount" {
+  name                = "diag${random_id.randomId.hex}"
+  resource_group_name = "${azurerm_resource_group.pipelinegroup.name}"
+  location            = "eastus"
+  account_replication_type = "LRS"
+  account_tier = "Standard"
+}
+
+resource "azurerm_virtual_machine" "pipelinevm" {
+  name = "solarisVM"
+  location = "eastus"
+  resource_group_name = "${azurerm_resource_group.pipelinegroup.name}"
+  network_interface_ids = ["${azurerm_network_interface.pipelinenic.id}"]
+  vm_size = "Standard_D2s_v3"
+
+  storage_os_disk {
+    name = "solarisOsDisk"
+    caching = "ReadWrite"
+    create_option = "FromImage"
+    managed_disk_type = "Premium_LRS"
+  }
+
+  storage_image_reference {
+    publisher = "Canonical"
+    offer     = "UbuntuServer"
+    sku       = "16.04-LTS"
+    version   = "latest"
+  }
+
+  os_profile {
+    computer_name  = "solarisvm"
+    admin_username = "azureuser"
+  }
+
+  os_profile_linux_config {
+    disable_password_authentication = true
+    ssh_keys {
+      path     = "/home/azureuser/.ssh/authorized_keys"
+      key_data = "ssh-rsa"
+    }
+  }
+}
